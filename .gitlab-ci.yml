@@ -1,0 +1,87 @@
+image: python:3.7.8-slim
+
+stages:
+  - build
+  - nonfunctionaltest
+  - integration
+  - deploy
+
+
+package:security:
+    stage: build
+    image: python:3.7.8-slim
+    before_script:
+      - apt-get update && apt-get install -y wget
+      - python3.7 -m pip install safety
+      - wget https://github.com/pyupio/safety-db/raw/master/data/insecure_full.json
+      - wget https://github.com/pyupio/safety-db/raw/master/data/insecure.json
+    script:
+      - safety check --db . -r ./backend/requirements.txt
+      - safety check --db . -r ./frontend/requirements.txt
+
+lint:
+  stage: nonfunctionaltest
+  image: python:3.7.8-slim
+  before_script:
+    - python3.7 -m ensurepip
+    - python3.7 -m pip install --upgrade pip flake8
+  script:
+    - flake8 backend/src
+    - flake8 frontend/src
+
+test:
+  stage: nonfunctionaltest
+  image: python:3.7.8-slim
+  before_script:
+    - python3.7 -m ensurepip
+    - python3.7 -m pip install --upgrade pip pytest coverage
+  script:
+    - coverage run -m pytest backend/src/test_app.py
+    - coverage report -m backend/src/test_app.py
+    - coverage run -m pytest frontend/src/test_app.py
+    - coverage report -m frontend/src/test_app.py
+
+
+# Prerequisite:
+# 1. Open this file in gitlab runner server: /etc/gitlab-runner/config.toml
+# 2. modify this line
+#     volumes = ["/cache"]
+#       to
+#     volumes = ["/cache", "/var/run/docker.sock:/var/run/docker.sock"]
+# Reference: https://gitlab.com/gitlab-org/gitlab-runner/-/issues/4794
+
+integration:
+  stage: integration
+  image: docker:latest
+  variables:
+      DOCKER_DRIVER: overlay2
+  before_script:
+      - apk update && apk upgrade
+      - apk add python3 gcc make g++ python3-dev libffi-dev libressl-dev
+      - python3.8 --version
+      - python3.8 -m ensurepip
+      - python3.8 -m pip install --upgrade pip wheel
+      - python3.8 -m pip install --upgrade pytest docker-compose coverage
+  script:
+      - docker-compose up --build -d backend
+      - docker-compose up --build -d frontend
+      - sleep 5m
+      - docker-compose up --build -d integration
+
+deploy:
+  stage: deploy
+  image: docker:latest
+  variables:
+      DOCKER_DRIVER: overlay2
+  before_script:
+      - apk update && apk upgrade
+      - apk add python3 gcc make g++ python3-dev libffi-dev libressl-dev bash git
+      - python3.8 --version
+      - python3.8 -m ensurepip
+      - python3.8 -m pip install --upgrade pip wheel
+      - python3.8 -m pip install --upgrade docker-compose
+  script:
+      # - ssh userid@server # We need to provide a server to deploy the docker. Otherwise, we will run it inside a Docker Runner
+      - git clone https://github.com/erelsoftbakedcookies/nowcasting
+      - cd nowcasting
+      - bash run.sh
