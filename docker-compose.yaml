@@ -1,0 +1,65 @@
+version: '3.7'
+
+services:
+  backend:
+    image: backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+    build:
+      context: ./backend
+      target: backend
+    volumes:
+      - modelupload:/apps/models
+      - /etc/localtime:/etc/localtime
+    networks:
+      - webnet
+
+  frontend:
+    image: frontend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+    build:
+      context: ./frontend
+      target: frontend
+    ports:
+      - 5000:5000
+    depends_on: 
+      - backend
+    volumes:
+      - modelupload:/apps/models
+      - /etc/localtime:/etc/localtime
+    networks:
+      - webnet
+    
+  integration:
+    image: integration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+    ports:
+      - 8099:8099
+    build:
+      context: ./integration
+      target: integration
+    depends_on: 
+      - backend
+      - frontend
+    volumes:
+      - modelupload:/apps/models
+      - /etc/localtime:/etc/localtime
+    networks:
+      - webnet
+
+networks:
+  webnet:
+
+volumes:
+  modelupload:
